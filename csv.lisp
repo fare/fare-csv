@@ -1,6 +1,8 @@
 ;;; -*- Mode: Lisp ; Base: 10 ; Syntax: ANSI-Common-Lisp -*-
 ;;; csv: reading files in Comma-Separated Values format.
 
+#+xcvb (module (:depends-on ("package")))
+
 #| "
 HOME PAGE:
 	http://www.cliki.net/fare-csv
@@ -73,19 +75,19 @@ Share and enjoy!
 ; -----------------------------------------------------------------------------
 ;;; Parameters
 
-(eval-when (:compile-toplevel :load-toplevel)
+(eval-when (:compile-toplevel :load-toplevel :execute)
   (defparameter +cr+ #.(format nil "~A" #\Return))
   (defparameter +lf+ #.(format nil "~A" #\Linefeed))
   (defparameter +crlf+ #.(format nil "~A~A" #\Return #\Linefeed))
-  (defparameter *csv-variables* '())
-  (defparameter *csv-rfc4180-values* '())
-  (defparameter *csv-creativyst-values* '())
+  (defparameter *csv-variables* '())) ; list of (var rfc4180-value creativyst-value)
+
+(eval-when (:compile-toplevel :load-toplevel :execute)
   (macrolet
       ((def (var rfc4180 creativyst doc)
-	   (push var *csv-variables*)
-	   (push creativyst *csv-creativyst-values*)
-	   (push rfc4180 *csv-rfc4180-values*)
-	   `(defparameter ,var ,creativyst ,doc)))
+         `(progn
+            (eval-when (:compile-toplevel :load-toplevel :execute)
+              (pushnew `(,',var ,,rfc4180 ,,creativyst) *csv-variables* :key #'car))
+            (defparameter ,var ,creativyst ,doc))))
     (def *separator*
 	#\, #\,
       "Separator between CSV fields")
@@ -121,19 +123,20 @@ M$, RFC says NIL, csv.3tcl says T")
 (defmacro with-creativyst-csv-syntax (() &body body)
   `(call-with-creativyst-csv-syntax (lambda () ,@body)))
 (defun call-with-creativyst-csv-syntax (thunk)
-  (progv *csv-variables* *csv-creativyst-values*
+  (progv (mapcar #'first *csv-variables*) (mapcar #'third *csv-variables*)
     (funcall thunk)))
 
 (defmacro with-rfc4180-csv-syntax (() &body body)
   `(call-with-rfc4180-csv-syntax (lambda () ,@body)))
 (defun call-with-rfc4180-csv-syntax (thunk)
-  (progv *csv-variables* *csv-rfc4180-values*
+  (progv (mapcar #'first *csv-variables*) (mapcar #'second *csv-variables*)
     (funcall thunk)))
 
 (defmacro with-strict-rfc4180-csv-syntax (() &body body)
   `(call-with-strict-rfc4180-csv-syntax (lambda () ,@body)))
+
 (defun call-with-strict-rfc4180-csv-syntax (thunk)
-  (progv *csv-variables* *csv-rfc4180-values*
+  (with-rfc4180-csv-syntax ()
     (setf *line-endings* (list +crlf+)
 	  *allow-binary* nil)
     (funcall thunk)))
@@ -152,7 +155,6 @@ M$, RFC says NIL, csv.3tcl says T")
   (assert (not (member (aref *eol* 0) (list *separator* *quote*))) ())
   (assert (and *line-endings* (every #'valid-eol-p *line-endings*)) ())
   (assert (typep *skip-whitespace* 'boolean) ()))
-
 
 ;; For internal use only
 (defvar *accept-cr* t "internal: do we accept cr?")

@@ -1,3 +1,5 @@
+#+xcvb (module (:depends-on nil))
+
 (cl:defpackage #:fare-csv
   (:use #:common-lisp)
   (:export
