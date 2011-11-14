@@ -76,9 +76,9 @@ Share and enjoy!
 ;;; Parameters
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
-  (defparameter +cr+ #.(format nil "~A" #\Return))
-  (defparameter +lf+ #.(format nil "~A" #\Linefeed))
-  (defparameter +crlf+ #.(format nil "~A~A" #\Return #\Linefeed))
+  (defparameter +cr+ #.(format nil "~A" #\Return) "String containing a CR (Carriage Return)")
+  (defparameter +lf+ #.(format nil "~A" #\Linefeed) "String containing a LF (Linefeed)")
+  (defparameter +crlf+ #.(format nil "~A~A" #\Return #\Linefeed) "String containing a CRLF line termination")
   (defparameter *csv-variables* '())) ; list of (var rfc4180-value creativyst-value)
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
@@ -120,19 +120,23 @@ M$, RFC says NIL, csv.3tcl says T")
 (defun char-ascii-text-p (c)
   (<= #x20 (char-code c) #x7E))
 
-(defmacro with-creativyst-csv-syntax (() &body body)
+(defmacro with-creativyst-csv-syntax ((&optional) &body body)
+  "bind CSV syntax parameters to the CREATIVYST standard around evaluation of BODY"
   `(call-with-creativyst-csv-syntax (lambda () ,@body)))
 (defun call-with-creativyst-csv-syntax (thunk)
   (progv (mapcar #'first *csv-variables*) (mapcar #'third *csv-variables*)
     (funcall thunk)))
 
-(defmacro with-rfc4180-csv-syntax (() &body body)
+(defmacro with-rfc4180-csv-syntax ((&optional) &body body)
+  "bind CSV syntax parameters to the RFC 4180 standard around evaluation of BODY"
   `(call-with-rfc4180-csv-syntax (lambda () ,@body)))
 (defun call-with-rfc4180-csv-syntax (thunk)
   (progv (mapcar #'first *csv-variables*) (mapcar #'second *csv-variables*)
     (funcall thunk)))
 
-(defmacro with-strict-rfc4180-csv-syntax (() &body body)
+(defmacro with-strict-rfc4180-csv-syntax ((&optional) &body body)
+  "bind CSV syntax parameters to the strict RFC 4180 standard around evaluation of BODY,
+forcing CRLF as line ending and disallowing binary data amongst values"
   `(call-with-strict-rfc4180-csv-syntax (lambda () ,@body)))
 
 (defun call-with-strict-rfc4180-csv-syntax (thunk)
@@ -223,6 +227,7 @@ even if restricted to ASCII. However, it's rather portable."
   (accept *separator* s))
 
 (defun read-csv-line (s)
+  "Read CSV from a line, a list of strings, one string for each field."
   (validate-csv-parameters)
   (let ((ss (make-string-output-stream))
 	(fields '())
@@ -342,10 +347,12 @@ even if restricted to ASCII. However, it's rather portable."
       (do-fields))))
 
 (defun read-csv-stream (s)
+  "Read CSV from a stream, returning a list for each line of a list of strings for each field."
   (loop until (accept-eof s)
     collect (read-csv-line s)))
 
 (defun read-csv-file (pathname)
+  "Read CSV from a file, returning a list for each line of a list of strings for each field."
   (with-open-file (s pathname :direction :input :if-does-not-exist :error)
     (read-csv-stream s)))
 
