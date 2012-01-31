@@ -175,10 +175,12 @@ forcing CRLF as line ending and disallowing binary data amongst values"
 
 (defsubst char-space-p (c)
   "Is character C some kind of white space?
-BUG: this only handles a tiny subset of character sets,
-even if restricted to ASCII. However, it's rather portable."
+NB: this only handles a tiny subset of whitespace characters,
+even if restricted to ASCII. However, it's rather portable,
+and is what the creativyst document specifies.
+Be careful to not skip a separator, as it could be e.g. a tab!"
   (declare (type (or null character) c))
-  (and c (member c '(#\Space #\Tab))))
+  (and c (member c '(#\Space #\Tab)) (not (eql c *separator*))))
 
 ;;#+DEBUG (defparameter *max* 2000)
 ;;#+DEBUG (defun maxbreak () (when (<= *max* 0) (setf *max* 2000) (break)) (decf *max*))
