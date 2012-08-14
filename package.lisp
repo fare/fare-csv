@@ -18,5 +18,4 @@
 
    #:with-creativyst-csv-syntax
    #:with-rfc4180-csv-syntax
-   #:with-strict-rfc4180-csv-syntax
-))
+   #:with-strict-rfc4180-csv-syntax))

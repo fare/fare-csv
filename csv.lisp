@@ -8,17 +8,19 @@ HOME PAGE:
 	http://www.cliki.net/fare-csv
 
 LICENSE:
-	http://www.geocities.com/SoHo/Cafe/5947/bugroff.html
+	http://tunes.org/legalese/bugroff.html
 	Also under no-restriction BSD license for those who insist.
 
 DEPENDENCIES:
-	apt-get install cl-asdf
+	asdf
 
 USAGE:
-	(asdf:load-system :fare-csv) ;; or (asdf:oos 'asdf:load-op :fare-csv) if using an old asdf
-	(read-csv-line)
-	(read-csv-stream s)
+	(asdf:load-system :fare-csv)
 	(read-csv-file "foo.csv")
+	(read-csv-stream stream)
+	(read-csv-line stream)
+	(write-csv-lines lines stream)
+	(write-csv-line fields stream)
 
 EXAMPLE USE:
 	...
@@ -57,20 +59,21 @@ Share and enjoy!
 
 ; -----------------------------------------------------------------------------
 ;;; Optimization
-(eval-when (:compile-toplevel)
-  (declaim (optimize (speed 3) (safety 1) (debug 3))))
+(eval-when (:compile-toplevel :execute)
+  (declaim (optimize (speed 3) (safety 1) (debug 3))
+           #+sbcl (sb-ext:muffle-conditions sb-ext:compiler-note)))
 
 ; -----------------------------------------------------------------------------
 ;;; Thin compatibility layer
 #| ;;; Not needed anymore
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (unless (fboundp 'parse-number)
-    (defun parse-number (s)
+    (defun parse-number (string)
       (with-standard-io-syntax ()
 	(let* ((*read-eval* nil)
 	       (*read-default-float-format* 'double-float)
-	       (n (read-from-string s)))
-	  (if (numberp n) n)))))) |#
+	       (n (read-from-string string)))
+	  (when (numberp n) n)))))) |#
 
 ; -----------------------------------------------------------------------------
 ;;; Parameters
@@ -185,8 +188,8 @@ Be careful to not skip a separator, as it could be e.g. a tab!"
 ;;#+DEBUG (defparameter *max* 2000)
 ;;#+DEBUG (defun maxbreak () (when (<= *max* 0) (setf *max* 2000) (break)) (decf *max*))
 
-(defsubst accept-p (x s)
-  (let ((c (peek-char nil s nil nil)))
+(defsubst accept-p (x stream)
+  (let ((c (peek-char nil stream nil nil)))
     ;;#+DEBUG (format t "~&Current char: ~S~%" c)
     ;;#+DEBUG (maxbreak)
     (etypecase x
@@ -194,42 +197,43 @@ Be careful to not skip a separator, as it could be e.g. a tab!"
       ((or function symbol) (funcall x c))
       (integer (eql x (char-code c))))))
 
-(defsubst accept (x s)
-  (and (accept-p x s)
-       (read-char s)))
+(defsubst accept (x stream)
+  (and (accept-p x stream)
+       (read-char stream)))
 
-(defsubst accept-eof (s)
-  (not (peek-char nil s nil nil)))
+(defsubst accept-eof (stream)
+  (not (peek-char nil stream nil nil)))
 
-(defsubst accept-eol (s)
+(defsubst accept-eol (stream)
   (block nil
-    (when (and *accept-lf* (accept #\Linefeed s)) (return t))
+    (when (and *accept-lf* (accept #\Linefeed stream)) (return t))
     (when (or *accept-crlf* *accept-cr*)
-      (when (accept #\Return s)
+      (when (accept #\Return stream)
 	(when *accept-crlf*
-	  (if (accept #\Linefeed s)
+	  (if (accept #\Linefeed stream)
 	      (return t)
 	      (unless *accept-cr*
 		(error "Carriage-return without Linefeed!"))))
 	(return t)))
     nil))
 
-(defsubst accept-space (s)
-  (accept #'char-space-p s))
+(defsubst accept-space (stream)
+  (accept #'char-space-p stream))
 
-(defsubst accept-spaces (s)
-  (loop for x = (accept-space s)
-	while x
-	collect x))
+(defsubst accept-spaces (stream)
+  (loop :for x = (accept-space stream) :while x :collect x))
 
-(defsubst accept-quote (s)
-  (accept *quote* s))
+(defsubst accept-quote (stream)
+  (accept *quote* stream))
 
-(defsubst accept-separator (s)
-  (accept *separator* s))
+(defsubst accept-separator (stream)
+  (accept *separator* stream))
 
-(defun read-csv-line (s)
-  "Read CSV from a line, a list of strings, one string for each field."
+(defun read-csv-line (stream)
+  "Read one line from STREAM in CSV format, using the current syntax parameters.
+  Return a list of strings, one for each field in the line.
+  Entries are read as strings;
+  it is up to you to interpret the strings as whatever you want."
   (validate-csv-parameters)
   (let ((ss (make-string-output-stream))
 	(fields '())
@@ -244,21 +248,21 @@ Be careful to not skip a separator, as it could be e.g. a tab!"
 	   ;;#+DEBUG (format t "~&do-field~%")
 	   (setf had-quotes nil)
 	   (when *skip-whitespace*
-	     (accept-spaces s))
+	     (accept-spaces stream))
 	   ;;#+DEBUG (format t "~&do-field, after spaces~%")
 	   (cond
-	     ((or (accept-eol s) (accept-eof s))
+	     ((or (accept-eol stream) (accept-eof stream))
 	      (done))
 	     (t
 	      (do-field-start))))
 	 (do-field-start ()
 	   ;;#+DEBUG (format t "~&do-field-start~%")
 	   (cond
-	     ((accept-separator s)
+	     ((accept-separator stream)
 	      (add "") (do-fields))
-	     ((accept-quote s)
+	     ((accept-quote stream)
 	      (cond
-		((and *unquoted-quotequote* (accept-quote s))
+		((and *unquoted-quotequote* (accept-quote stream))
 		 (add-char *quote*) (do-field-unquoted))
 		(t
 		 (do-field-quoted))))
@@ -268,11 +272,11 @@ Be careful to not skip a separator, as it could be e.g. a tab!"
 	   ;;#+DEBUG (format t "~&do-field-quoted~%")
 	   (setf had-quotes t)
            (cond
-	     ((accept-eof s)
+	     ((accept-eof stream)
 	      (error "unexpected end of stream in quotes"))
-	     ((accept-quote s)
+	     ((accept-quote stream)
 	      (cond
-		((accept-quote s)
+		((accept-quote stream)
 		 (quoted-field-char *quote*))
 		(*loose-quote*
 		 (do-field-unquoted))
@@ -280,7 +284,7 @@ Be careful to not skip a separator, as it could be e.g. a tab!"
 		 (add (current-string))
 		 (end-of-field))))
 	     (t
-	      (quoted-field-char (read-char s)))))
+	      (quoted-field-char (read-char stream)))))
 	 (quoted-field-char (c)
 	   ;;#+DEBUG (format t "~&quoted-field-char~%")
 	   (add-char c)
@@ -288,46 +292,46 @@ Be careful to not skip a separator, as it could be e.g. a tab!"
 	 (do-field-unquoted ()
 	   ;;#+DEBUG (format t "~&do-field-unquoted~%")
 	   (if *skip-whitespace*
-	       (let ((spaces (accept-spaces s)))
+	       (let ((spaces (accept-spaces stream)))
 		 (cond
-		   ((accept-separator s)
+		   ((accept-separator stream)
 		    (add (current-string))
 		    (do-fields))
-		   ((or (accept-eol s) (accept-eof s))
+		   ((or (accept-eol stream) (accept-eof stream))
 		    (add (current-string))
 		    (done))
 		   (t
-		    (loop for x in spaces do (add-char x))
+		    (map () #'add-char spaces)
 		    (do-field-unquoted-no-skip))))
 	       (do-field-unquoted-no-skip)))
 	 (do-field-unquoted-no-skip ()
 	   ;;#+DEBUG (format t "~&do-field-unquoted-no-skip~%")
 	   (cond
-	     ((accept-separator s)
+	     ((accept-separator stream)
 	      (add (current-string))
 	      (do-fields))
-	     ((or (accept-eol s) (accept-eof s))
+	     ((or (accept-eol stream) (accept-eof stream))
 	      (add (current-string))
 	      (done))
-	     ((accept-quote s)
+	     ((accept-quote stream)
 	      (cond
-		((and *unquoted-quotequote* (accept-quote s))
+		((and *unquoted-quotequote* (accept-quote stream))
 		 (add-char *quote*) (do-field-unquoted))
 		(*loose-quote*
 		 (do-field-quoted))
 		(t
 		 (error "unexpected quote in middle of field"))))
 	     (t
-	      (add-char (read-char s))
+	      (add-char (read-char stream))
 	      (do-field-unquoted))))
 	 (end-of-field ()
 	   ;;#+DEBUG (format t "~&end-of-field~%")
 	   (when *skip-whitespace*
-	     (accept-spaces s))
+	     (accept-spaces stream))
 	   (cond
-	     ((or (accept-eol s) (accept-eof s))
+	     ((or (accept-eol stream) (accept-eof stream))
 	      (done))
-	     ((accept-separator s)
+	     ((accept-separator stream)
 	      (do-fields))
 	     (t
 	      (error "end of field expected"))))
@@ -348,15 +352,21 @@ Be careful to not skip a separator, as it could be e.g. a tab!"
 	   (nreverse fields)))
       (do-fields))))
 
-(defun read-csv-stream (s)
-  "Read CSV from a stream, returning a list for each line of a list of strings for each field."
-  (loop until (accept-eof s)
-    collect (read-csv-line s)))
+(defun read-csv-stream (stream)
+  "Read lines from STREAM in CSV format, using the current syntax parameters.
+  Return a list of list of strings, one entry for each line,
+  that contains one entry for each field.
+  Entries are read as strings;
+  it is up to you to interpret the strings as whatever you want."
+  (loop :until (accept-eof stream) :collect (read-csv-line stream)))
 
-(defun read-csv-file (pathname)
-  "Read CSV from a file, returning a list for each line of a list of strings for each field."
-  (with-open-file (s pathname :direction :input :if-does-not-exist :error)
-    (read-csv-stream s)))
+(defun read-csv-file (pathname &rest keys &key element-type external-format)
+  "Open the file designated by PATHNAME, using the provided keys if any,
+  and call READ-CSV-STREAM on it."
+  (declare (ignore element-type external-format))
+  (with-open-stream (stream (apply 'open pathname
+                                   :direction :input :if-does-not-exist :error keys))
+    (read-csv-stream stream)))
 
 (defun char-needs-quoting (x)
   (or (eql x *quote*)
@@ -371,18 +381,18 @@ Be careful to not skip a separator, as it could be e.g. a tab!"
        t))
 
 (defun write-csv-lines (lines stream)
-  "Write many CSV line to STREAM."
+  "Given a list of LINES, each of them a list of fields, and a STREAM,
+  format those lines as CSV according to the current syntax parameters."
   (dolist (x lines)
     (write-csv-line x stream)))
 
 (defun write-csv-line (fields stream)
-  "Write one CSV line to STREAM."
-  (loop for x on fields
-	while x
-	do
-	(write-csv-field (first x) stream)
-	(when (cdr x)
-	  (write-char *separator* stream)))
+  "Format one line of FIELDS to STREAM in CSV format,
+  using the current syntax parameters."
+  (loop :for x :on fields :do
+    (write-csv-field (first x) stream)
+    (when (cdr x)
+      (write-char *separator* stream)))
   (write-string *eol* stream))
 
 (defun write-csv-field (field stream)
@@ -399,13 +409,12 @@ Be careful to not skip a separator, as it could be e.g. a tab!"
 
 (defun write-quoted-string (string stream)
   (write-char *quote* stream)
-  (loop for c across string do
-	(when (char= c *quote*)
-	  (write-char c stream))
-	(write-char c stream))
+  (loop :for c :across string :do
+    (when (char= c *quote*)
+      (write-char c stream))
+    (write-char c stream))
   (write-char *quote* stream))
 
-;(trace read-csv-line read-csv-stream)
-
+;;#+DEBUG (trace read-csv-line read-csv-stream)
 ;;#+DEBUG (write (read-csv-file "test.csv"))
 ;;#+DEBUG (progn (setq *separator* #\;) (write (read-csv-file "/samba/ciev.csv")))
