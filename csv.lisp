@@ -250,7 +250,12 @@ Be careful to not skip a separator, as it could be e.g. a tab!"
 	   (when *skip-whitespace*
 	     (accept-spaces stream))
 	   ;;#+DEBUG (format t "~&do-field, after spaces~%")
-	   (do-field-start))
+           (cond
+             ((and (= 0 (length fields))
+                   (or (accept-eol stream) (accept-eof stream)))
+              (done))
+             (t
+              (do-field-start))))
 	 (do-field-start ()
 	   ;;#+DEBUG (format t "~&do-field-start~%")
 	   (cond
