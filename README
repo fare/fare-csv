@@ -3,6 +3,10 @@ FARE-CSV
 This library allows you to read and write CSV files, according to
 any of the prevailing "standards" and their popular variants.
 
+(ql:quickload :fare-csv)
+(let ((fare-csv:*separator* #\;))
+  (fare-csv:read-csv-file "/tmp/semicolon-separated.csv"))
+
 CSV means "Comma-Separated Values". It's a vastly underspecified "standard",
 as each and every implementation seems to behave differently, and sometimes,
 even major implementations (e.g. Microsoft Excel) change their behavior
