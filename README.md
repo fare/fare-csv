@@ -11,7 +11,7 @@ Example usage
     (ql:quickload :fare-csv)
     (fare-csv:with-rfc4180-csv-syntax ()
       (let ((fare-csv:*separator* #\;))
-       (fare-csv:read-csv-file "/tmp/semicolon-separated.csv"))
+       (fare-csv:read-csv-file "/tmp/semicolon-separated.csv")))
 
 
 Competing standards
