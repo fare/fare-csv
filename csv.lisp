@@ -251,7 +251,7 @@ Be careful to not skip a separator, as it could be e.g. a tab!"
 	     (accept-spaces stream))
 	   ;;#+DEBUG (format t "~&do-field, after spaces~%")
            (cond
-             ((and (= 0 (length fields))
+             ((and (null fields)
                    (or (accept-eol stream) (accept-eof stream)))
               (done))
              (t
