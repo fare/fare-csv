@@ -107,9 +107,6 @@ M$, RFC says NIL, csv.3tcl says T")
     (def *allow-binary*
 	t t
       "do we accept non-ascii data?")
-    (def *keep-meta-info*
-	nil nil
-      "when parsing, include meta information?")
     (def *eol*
 	+lf+ +crlf+
       "line ending when exporting CSV")
@@ -121,7 +118,8 @@ M$, RFC says NIL, csv.3tcl says T")
       "shall we skip unquoted whitespace around separators?")))
 
 (defun char-ascii-text-p (c)
-  (<= #x20 (char-code c) #x7E))
+  (let ((i (char-code c)))
+    (or (<= #x20 i #x7E) (= i 10) (= i 13))))
 
 (defmacro with-creativyst-csv-syntax ((&optional) &body body)
   "bind CSV syntax parameters to the CREATIVYST standard around evaluation of BODY"
@@ -157,7 +155,6 @@ forcing CRLF as line ending and disallowing binary data amongst values"
   (assert (not (eql *separator* *quote*)) ())
   (assert (typep *unquoted-quotequote* 'boolean) ())
   (assert (typep *loose-quote* 'boolean) ())
-  (assert (typep *keep-meta-info* 'boolean) ())
   (assert (valid-eol-p *eol*) ())
   (assert (not (member (aref *eol* 0) (list *separator* *quote*))) ())
   (assert (and *line-endings* (every #'valid-eol-p *line-endings*)) ())
@@ -185,13 +182,8 @@ Be careful to not skip a separator, as it could be e.g. a tab!"
   (declare (type (or null character) c))
   (and c (member c '(#\Space #\Tab)) (not (eql c *separator*))))
 
-;;#+DEBUG (defparameter *max* 2000)
-;;#+DEBUG (defun maxbreak () (when (<= *max* 0) (setf *max* 2000) (break)) (decf *max*))
-
 (defsubst accept-p (x stream)
   (let ((c (peek-char nil stream nil nil)))
-    ;;#+DEBUG (format t "~&Current char: ~S~%" c)
-    ;;#+DEBUG (maxbreak)
     (etypecase x
       (character (eql x c))
       ((or function symbol) (funcall x c))
@@ -238,18 +230,14 @@ Be careful to not skip a separator, as it could be e.g. a tab!"
   (let ((ss (make-string-output-stream))
 	(fields '())
 	(had-quotes nil)
-	;;(had-spaces nil)
-	;;(had-binary nil)
 	(*accept-cr* (member +cr+ *line-endings* :test #'equal))
 	(*accept-lf* (member +lf+ *line-endings* :test #'equal))
 	(*accept-crlf* (member +crlf+ *line-endings* :test #'equal)))
     (labels
 	((do-fields ()
-	   ;;#+DEBUG (format t "~&do-field~%")
 	   (setf had-quotes nil)
 	   (when *skip-whitespace*
 	     (accept-spaces stream))
-	   ;;#+DEBUG (format t "~&do-field, after spaces~%")
            (cond
              ((and (null fields)
                    (or (accept-eol stream) (accept-eof stream)))
@@ -257,7 +245,6 @@ Be careful to not skip a separator, as it could be e.g. a tab!"
              (t
               (do-field-start))))
 	 (do-field-start ()
-	   ;;#+DEBUG (format t "~&do-field-start~%")
 	   (cond
 	     ((accept-separator stream)
 	      (add "") (do-fields))
@@ -270,7 +257,6 @@ Be careful to not skip a separator, as it could be e.g. a tab!"
 	     (t
 	      (do-field-unquoted))))
 	 (do-field-quoted ()
-	   ;;#+DEBUG (format t "~&do-field-quoted~%")
 	   (setf had-quotes t)
            (cond
 	     ((accept-eof stream)
@@ -287,11 +273,9 @@ Be careful to not skip a separator, as it could be e.g. a tab!"
 	     (t
 	      (quoted-field-char (read-char stream)))))
 	 (quoted-field-char (c)
-	   ;;#+DEBUG (format t "~&quoted-field-char~%")
 	   (add-char c)
 	   (do-field-quoted))
 	 (do-field-unquoted ()
-	   ;;#+DEBUG (format t "~&do-field-unquoted~%")
 	   (if *skip-whitespace*
 	       (let ((spaces (accept-spaces stream)))
 		 (cond
@@ -306,7 +290,6 @@ Be careful to not skip a separator, as it could be e.g. a tab!"
 		    (do-field-unquoted-no-skip))))
 	       (do-field-unquoted-no-skip)))
 	 (do-field-unquoted-no-skip ()
-	   ;;#+DEBUG (format t "~&do-field-unquoted-no-skip~%")
 	   (cond
 	     ((accept-separator stream)
 	      (add (current-string))
@@ -326,7 +309,6 @@ Be careful to not skip a separator, as it could be e.g. a tab!"
 	      (add-char (read-char stream))
 	      (do-field-unquoted))))
 	 (end-of-field ()
-	   ;;#+DEBUG (format t "~&end-of-field~%")
 	   (when *skip-whitespace*
 	     (accept-spaces stream))
 	   (cond
@@ -337,19 +319,14 @@ Be careful to not skip a separator, as it could be e.g. a tab!"
 	     (t
 	      (error "end of field expected"))))
 	 (add (x)
-	   ;;#+DEBUG (format t "~&add ~S~%" x)
-	   (push
-	    (if *keep-meta-info*
-		(list x :quoted had-quotes)
-		x)
-	    fields))
+	   (push x fields))
 	 (add-char (c)
-	   ;;#+DEBUG (format t "~&add-char ~S~%" c)
+           (unless (or *allow-binary* (char-ascii-text-p c))
+             (error "binary data not allowed ~s" c))
 	   (write-char c ss))
 	 (current-string ()
 	   (get-output-stream-string ss))
 	 (done ()
-	   ;;#+DEBUG (format t "~&done ~S~%" fields)
 	   (nreverse fields)))
       (do-fields))))
 
@@ -372,6 +349,8 @@ Be careful to not skip a separator, as it could be e.g. a tab!"
 (defun char-needs-quoting (x)
   (or (eql x *quote*)
       (eql x *separator*)
+      (eql x #\linefeed)
+      (eql x #\return)
       (not (char-ascii-text-p x))))
 
 (defun string-needs-quoting (x)
@@ -415,7 +394,3 @@ Be careful to not skip a separator, as it could be e.g. a tab!"
       (write-char c stream))
     (write-char c stream))
   (write-char *quote* stream))
-
-;;#+DEBUG (trace read-csv-line read-csv-stream)
-;;#+DEBUG (write (read-csv-file "test.csv"))
-;;#+DEBUG (progn (setq *separator* #\;) (write (read-csv-file "/samba/ciev.csv")))
