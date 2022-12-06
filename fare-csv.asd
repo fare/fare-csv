@@ -1,9 +1,9 @@
 ;;; -*- Lisp -*-
 
 (defsystem "fare-csv"
-  :license "BSD or bugroff"
+  :license "MIT" ; also bugroff
   :author "Francois-Rene Rideau"
-  :version "1.0.3"
+  :version "1.0.4"
   :depends-on ()
   :components ((:file "package") (:file "csv"))
   :description "Robust CSV parser and printer"

@@ -92,29 +92,29 @@ Share and enjoy!
               (pushnew `(,',var ,,rfc4180 ,,creativyst) *csv-variables* :key #'car))
             (defparameter ,var ,creativyst ,doc))))
     (def *separator*
-	#\, #\,
+      #\, #\,
       "Separator between CSV fields")
     (def *quote*
-	#\" #\"
+      #\" #\"
       "delimiter of string data; pascal-like quoted as double itself in a string.")
     (def *unquoted-quotequote*
-	nil nil
+      nil nil
       "does a pair of quotes represent a quote outside of quotes?
 M$, RFC says NIL, csv.3tcl says T")
     (def *loose-quote*
-	nil nil
+      nil nil
       "can quotes appear anywhere in a field?")
     (def *allow-binary*
-	t t
+      t t
       "do we accept non-ascii data?")
     (def *eol*
-	+lf+ +crlf+
+      +lf+ +crlf+
       "line ending when exporting CSV")
     (def *line-endings*
-	(list +crlf+ +lf+) (list +cr+ +lf+ +crlf+)
+      (list +crlf+ +lf+) (list +cr+ +lf+ +crlf+)
       "acceptable line endings when importing CSV")
     (def *skip-whitespace*
-	nil t
+      nil t
       "shall we skip unquoted whitespace around separators?")))
 
 (defun char-ascii-text-p (c)
