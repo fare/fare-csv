@@ -3,7 +3,7 @@
 (defsystem "fare-csv"
   :license "MIT" ; also bugroff
   :author "Francois-Rene Rideau"
-  :version "1.0.4"
+  :version "1.0.5"
   :depends-on ()
   :components ((:file "package") (:file "csv"))
   :description "Robust CSV parser and printer"
