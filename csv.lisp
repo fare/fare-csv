@@ -229,13 +229,11 @@ Be careful to not skip a separator, as it could be e.g. a tab!"
   (validate-csv-parameters)
   (let ((ss (make-string-output-stream))
 	(fields '())
-	(had-quotes nil)
 	(*accept-cr* (member +cr+ *line-endings* :test #'equal))
 	(*accept-lf* (member +lf+ *line-endings* :test #'equal))
 	(*accept-crlf* (member +crlf+ *line-endings* :test #'equal)))
     (labels
 	((do-fields ()
-	   (setf had-quotes nil)
 	   (when *skip-whitespace*
 	     (accept-spaces stream))
            (cond
@@ -257,7 +255,6 @@ Be careful to not skip a separator, as it could be e.g. a tab!"
 	     (t
 	      (do-field-unquoted))))
 	 (do-field-quoted ()
-	   (setf had-quotes t)
            (cond
 	     ((accept-eof stream)
 	      (error "unexpected end of stream in quotes"))
