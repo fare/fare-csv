@@ -238,12 +238,7 @@ Be careful to not skip a separator, as it could be e.g. a tab!"
 	   (setf had-quotes nil)
 	   (when *skip-whitespace*
 	     (accept-spaces stream))
-           (cond
-             ((and (null fields)
-                   (or (accept-eol stream) (accept-eof stream)))
-              (done))
-             (t
-              (do-field-start))))
+	   (do-field-start))
 	 (do-field-start ()
 	   (cond
 	     ((accept-separator stream)

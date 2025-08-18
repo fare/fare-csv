@@ -61,8 +61,25 @@
 ")
   (test-read-write
    "   "
-   '(())
+   '((""))
    +lf+)
   (test-both
    ""
    '()))
+
+(deftest test-empty-field ()
+  (test-read
+    "a
+
+c"
+    '(("a")
+      ("")
+      ("c")))
+  (test-read
+    "a
+"
+    '(("a")))
+  (test-read
+    "a
+    "
+    '(("a") (""))))
