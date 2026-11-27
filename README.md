@@ -155,3 +155,23 @@ fare-csv defines and uses package `FARE-CSV`.
   all the above parameters will be bound as per the RFC4180 specification,
   but with a stricter interpretation:
   `*EOL*` is `+CRLF+`, only `+CRLF+` is accepted as `*LINE-ENDINGS*`, and we don't `*ALLOW-BINARY*` data.
+
+### Writing records that can be read back
+
+A blank line represents zero fields. In the three built-in dialects, a row
+containing one empty string is written as `""`. Two empty fields are written
+as a separator alone.
+
+With `*unquoted-quotequote*` true, a pair of quotes at the start of a field
+represents a literal quote. The writer doubles leading quotes in this dialect.
+A singleton empty field has no spelling and signals an error. With loose
+quoting disabled, a field beginning with a quote may also be unrepresentable,
+for example if it contains the separator. With loose quoting enabled, the
+writer can quote the remainder of such a field.
+
+With `*allow-binary*` false, reading and writing accept printable ASCII, CR
+and LF as field contents. For example, a tab in a field signals an error.
+
+When CRLF is the only configured record ending, a lone CR or LF outside a
+quoted field is an error. A CR-only or LF-only dialect can still carry the
+other character as field data.

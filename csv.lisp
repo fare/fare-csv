@@ -110,9 +110,6 @@ M$, RFC says NIL, csv.3tcl says T")
     (def *eol*
       +lf+ +crlf+
       "line ending when exporting CSV")
-    (def *strict-record-endings*
-      nil nil
-      "Internal: reject unquoted CR or LF outside a recognized record ending.")
     (def *line-endings*
       (list +crlf+ +lf+) (list +cr+ +lf+ +crlf+)
       "acceptable line endings when importing CSV")
@@ -145,8 +142,7 @@ forcing CRLF as line ending and disallowing binary data amongst values"
 
 (defun call-with-strict-rfc4180-csv-syntax (thunk)
   (with-rfc4180-csv-syntax ()
-    (setf *strict-record-endings* t
-          *eol* +crlf+
+    (setf *eol* +crlf+
           *line-endings* (list +crlf+)
 	  *allow-binary* nil)
     (funcall thunk)))
@@ -212,8 +208,8 @@ Be careful to not skip a separator, as it could be e.g. a tab!"
 	      (unless *accept-cr*
 		(error "Carriage-return without Linefeed!"))))
 	(return t)))
-    (when (and *strict-record-endings*
-               (member (peek-char nil stream nil nil) '(#\Return #\Linefeed)))
+    (when (and *accept-crlf* (not *accept-cr*) (not *accept-lf*)
+               (accept-p #\Linefeed stream))
       (error "Unexpected CSV record terminator"))
     nil))
 
@@ -374,34 +370,55 @@ Be careful to not skip a separator, as it could be e.g. a tab!"
 (defun write-csv-line (fields stream)
   "Format one line of FIELDS to STREAM in CSV format,
   using the current syntax parameters."
-  (if (and fields (null (cdr fields))
-           (let ((field (car fields)))
-             (or (null field) (equal field "")
-                 (and (symbolp field) (zerop (length (symbol-name field))))))
-           (not *unquoted-quotequote*))
-      (write-quoted-string "" stream)
-      (loop :for x :on fields :do
-        (write-csv-field (first x) stream)
-        (when (cdr x)
-          (write-char *separator* stream))))
+  (let ((singleton (and fields (null (cdr fields)))))
+    (loop :for tail :on fields
+          :for field = (car tail)
+          :for text = (etypecase field
+                        (null "")
+                        (string field)
+                        (number (princ-to-string field))
+                        (symbol (symbol-name field)))
+          :do (write-csv-string-safely text stream singleton)
+              (when (cdr tail) (write-char *separator* stream))))
   (write-string *eol* stream))
 
-(defun write-csv-field (field stream)
-  (etypecase field
-    (null t)
-    (number (write-csv-string-safely (princ-to-string field) stream))
-    (string (write-csv-string-safely field stream))
-    (symbol (write-csv-string-safely (symbol-name field) stream))))
+(defun write-csv-string-safely (text stream singleton)
+  (unless (or *allow-binary* (every #'char-ascii-text-p text))
+    (error "Binary data not allowed in CSV field ~S" text))
+  (cond
+    ((zerop (length text))
+     (when singleton
+       (when *unquoted-quotequote*
+         (error "A singleton empty field has no spelling in this CSV syntax"))
+       (write-quoted-string text stream)))
+    ((and *unquoted-quotequote* (char= (char text 0) *quote*))
+     ;; A quoted field starting with a quote would be read as unquoted.
+     (let ((suffix (position *quote* text :test-not #'char=)))
+       (cond
+         ((and suffix *loose-quote*)
+          (dotimes (i (* 2 suffix)) (write-char *quote* stream))
+          (write-quoted-string (subseq text suffix) stream))
+         (t
+          (when (or (find *separator* text)
+                    (and *skip-whitespace* (char-space-p (char text (1- (length text)))))
+                    (and (find #\Return text)
+                         (or (member +cr+ *line-endings* :test #'equal)
+                             (member +crlf+ *line-endings* :test #'equal)))
+                    (and (find #\Linefeed text)
+                         (or (member +lf+ *line-endings* :test #'equal)
+                             (and (member +crlf+ *line-endings* :test #'equal)
+                                  (not (member +cr+ *line-endings* :test #'equal))))))
+            (error "Field has no spelling in this CSV syntax: ~S" text))
+          (write-escaped-string text stream)))))
+    ((string-needs-quoting text) (write-quoted-string text stream))
+    (t (write-string text stream))))
 
-(defun write-csv-string-safely (string stream)
-  (if (string-needs-quoting string)
-      (write-quoted-string string stream)
-      (write-string string stream)))
+(defun write-escaped-string (text stream)
+  (loop :for c :across text :do
+    (when (char= c *quote*) (write-char c stream))
+    (write-char c stream)))
 
-(defun write-quoted-string (string stream)
+(defun write-quoted-string (text stream)
   (write-char *quote* stream)
-  (loop :for c :across string :do
-    (when (char= c *quote*)
-      (write-char c stream))
-    (write-char c stream))
+  (write-escaped-string text stream)
   (write-char *quote* stream))
