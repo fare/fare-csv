@@ -156,6 +156,7 @@ forcing CRLF as line ending and disallowing binary data amongst values"
   (assert (not (eql *separator* *quote*)) ())
   (assert (typep *unquoted-quotequote* 'boolean) ())
   (assert (typep *loose-quote* 'boolean) ())
+  (assert (typep *allow-binary* 'boolean) ())
   (assert (valid-eol-p *eol*) ())
   (assert (not (member (aref *eol* 0) (list *separator* *quote*))) ())
   (assert (and *line-endings* (every #'valid-eol-p *line-endings*)) ())
@@ -181,7 +182,7 @@ even if restricted to ASCII. However, it's rather portable,
 and is what the creativyst document specifies.
 Be careful to not skip a separator, as it could be e.g. a tab!"
   (declare (type (or null character) c))
-  (and c (member c '(#\Space #\Tab)) (not (eql c *separator*))))
+  (and c (member c '(#\Space #\Tab)) (not (eql c *separator*)) (not (eql c *quote*))))
 
 (defsubst accept-p (x stream)
   (let ((c (peek-char nil stream nil nil)))
@@ -231,6 +232,9 @@ Be careful to not skip a separator, as it could be e.g. a tab!"
   Entries are read as strings;
   it is up to you to interpret the strings as whatever you want."
   (validate-csv-parameters)
+  (read-csv-record stream))
+
+(defun read-csv-record (stream)
   (let ((ss (make-string-output-stream))
 	(fields '())
 	(*accept-cr* (member +cr+ *line-endings* :test #'equal))
@@ -337,7 +341,8 @@ Be careful to not skip a separator, as it could be e.g. a tab!"
   that contains one entry for each field.
   Entries are read as strings;
   it is up to you to interpret the strings as whatever you want."
-  (loop :until (accept-eof stream) :collect (read-csv-line stream)))
+  (validate-csv-parameters)
+  (loop :until (accept-eof stream) :collect (read-csv-record stream)))
 
 (defun read-csv-file (pathname &rest keys &key element-type external-format)
   "Open the file designated by PATHNAME, using the provided keys if any,
@@ -364,12 +369,17 @@ Be careful to not skip a separator, as it could be e.g. a tab!"
 (defun write-csv-lines (lines stream)
   "Given a list of LINES, each of them a list of fields, and a STREAM,
   format those lines as CSV according to the current syntax parameters."
+  (validate-csv-parameters)
   (dolist (x lines)
-    (write-csv-line x stream)))
+    (write-csv-record x stream)))
 
 (defun write-csv-line (fields stream)
   "Format one line of FIELDS to STREAM in CSV format,
   using the current syntax parameters."
+  (validate-csv-parameters)
+  (write-csv-record fields stream))
+
+(defun write-csv-record (fields stream)
   (let ((singleton (and fields (null (cdr fields)))))
     (loop :for tail :on fields
           :for field = (car tail)

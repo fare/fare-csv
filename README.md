@@ -175,3 +175,12 @@ and LF as field contents. For example, a tab in a field signals an error.
 When CRLF is the only configured record ending, a lone CR or LF outside a
 quoted field is an error. A CR-only or LF-only dialect can still carry the
 other character as field data.
+
+The public readers and writers check the dialect before processing any rows,
+including an empty input or row list. At least one input line ending must be
+enabled. If the separator or quote is a space or tab, it retains its CSV
+meaning when surrounding whitespace is skipped.
+
+For interchange with Gerbil's `:std/encoding/csv`, supply strings when the
+precise spelling matters. Each implementation uses its own number printer
+and symbol names when converting other values to text.
