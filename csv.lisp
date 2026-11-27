@@ -110,6 +110,9 @@ M$, RFC says NIL, csv.3tcl says T")
     (def *eol*
       +lf+ +crlf+
       "line ending when exporting CSV")
+    (def *strict-record-endings*
+      nil nil
+      "Internal: reject unquoted CR or LF outside a recognized record ending.")
     (def *line-endings*
       (list +crlf+ +lf+) (list +cr+ +lf+ +crlf+)
       "acceptable line endings when importing CSV")
@@ -142,7 +145,9 @@ forcing CRLF as line ending and disallowing binary data amongst values"
 
 (defun call-with-strict-rfc4180-csv-syntax (thunk)
   (with-rfc4180-csv-syntax ()
-    (setf *line-endings* (list +crlf+)
+    (setf *strict-record-endings* t
+          *eol* +crlf+
+          *line-endings* (list +crlf+)
 	  *allow-binary* nil)
     (funcall thunk)))
 
@@ -207,6 +212,9 @@ Be careful to not skip a separator, as it could be e.g. a tab!"
 	      (unless *accept-cr*
 		(error "Carriage-return without Linefeed!"))))
 	(return t)))
+    (when (and *strict-record-endings*
+               (member (peek-char nil stream nil nil) '(#\Return #\Linefeed)))
+      (error "Unexpected CSV record terminator"))
     nil))
 
 (defsubst accept-space (stream)
@@ -366,16 +374,22 @@ Be careful to not skip a separator, as it could be e.g. a tab!"
 (defun write-csv-line (fields stream)
   "Format one line of FIELDS to STREAM in CSV format,
   using the current syntax parameters."
-  (loop :for x :on fields :do
-    (write-csv-field (first x) stream)
-    (when (cdr x)
-      (write-char *separator* stream)))
+  (if (and fields (null (cdr fields))
+           (let ((field (car fields)))
+             (or (null field) (equal field "")
+                 (and (symbolp field) (zerop (length (symbol-name field))))))
+           (not *unquoted-quotequote*))
+      (write-quoted-string "" stream)
+      (loop :for x :on fields :do
+        (write-csv-field (first x) stream)
+        (when (cdr x)
+          (write-char *separator* stream))))
   (write-string *eol* stream))
 
 (defun write-csv-field (field stream)
   (etypecase field
     (null t)
-    (number (princ field stream))
+    (number (write-csv-string-safely (princ-to-string field) stream))
     (string (write-csv-string-safely field stream))
     (symbol (write-csv-string-safely (symbol-name field) stream))))
 

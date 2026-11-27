@@ -66,3 +66,48 @@
   (test-both
    ""
    '()))
+
+(deftest test-strict-record-endings ()
+  (with-strict-rfc4180-csv-syntax ()
+    (let ((rows '(("a") ("b"))))
+      (let ((csv (with-output-to-string (out) (write-csv-lines rows out))))
+        (is (equal csv (strcat "a" +crlf+ "b" +crlf+)))
+        (is (equal rows (csv->lines csv)))))
+    (signals error (csv->lines (strcat "a" +lf+ "b")))
+    (signals error (csv->lines (strcat "a" +cr+ "b")))
+    (is (equal (csv->lines (strcat "\"" +lf+ "\"" +crlf+))
+               (list (list +lf+))))))
+
+(deftest test-single-empty-field ()
+  (let ((rows (list nil '("") '(nil) (list (make-symbol "")) '("" ""))))
+    (is (equal (csv->lines (with-output-to-string (out)
+                             (write-csv-lines rows out)))
+               '(nil ("") ("") ("") ("" ""))))))
+
+(deftest test-configured-separator ()
+  (let ((*separator* #\/))
+    (is (equal (csv->lines (with-output-to-string (out)
+                             (write-csv-line '(1/2 :a/b "x/y") out)))
+               '(("1/2" "A/B" "x/y"))))))
+
+(deftest test-field-round-trips ()
+  (let ((rows (loop for x in (list "a" " a" "a " "a b" "," "\"" "a,\"b"
+                                   +cr+ +lf+ +crlf+ "" nil)
+                    collect (list x "tail"))))
+    (flet ((check ()
+             (is (equal (csv->lines (with-output-to-string (out)
+                                      (write-csv-lines rows out)))
+                        (loop for (x tail) in rows collect (list (or x "") tail))))))
+      (with-creativyst-csv-syntax () (check))
+      (with-rfc4180-csv-syntax () (check))
+      (with-strict-rfc4180-csv-syntax () (check)))))
+
+(deftest test-custom-record-endings ()
+  (let ((*line-endings* (list +cr+)) (*eol* +cr+))
+    (is (equal (csv->lines (strcat "a" +lf+ "b" +cr+))
+               (list (list (strcat "a" +lf+ "b"))))))
+  (with-strict-rfc4180-csv-syntax ()
+    (with-creativyst-csv-syntax ()
+      (let ((*line-endings* (list +lf+)))
+        (is (equal (csv->lines (strcat "a" +cr+ "b" +lf+))
+                   (list (list (strcat "a" +cr+ "b")))))))))

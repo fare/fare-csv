@@ -66,8 +66,9 @@ fare-csv defines and uses package `FARE-CSV`.
 * `Function READ-CSV-LINE (STREAM)`
   Read one line from `STREAM` in CSV format, using the current syntax parameters.
   Return a list of strings, one for each field in the line.
-  Entries are read as strings;
-  it is up to you to interpret the strings as whatever you want.
+  A blank record yields `NIL`. A trailing separator adds an empty string field.
+  At end of input this function returns `NIL` as well. Use `READ-CSV-STREAM`
+  to collect every record, including blank ones.
 
 * `Function READ-CSV-FILE (PATHNAME &KEY ELEMENT-TYPE EXTERNAL-FORMAT)`
   Open the file designated by `PATHNAME`, using the provided keys if any,
@@ -86,7 +87,8 @@ fare-csv defines and uses package `FARE-CSV`.
   if it's null, write an empty field;
   if it's a different symbol, write its name as if a string,
   only using quotes if needed for escaping;
-  if it's a number, format it as per `PRINC`.
+  if it's a number, format it as per `PRINC` and quote the result when needed.
+  For example, with `#\/` as the separator, the ratio `1/2` occupies one field.
 
 * `Constant +CR+`
   a string with the ASCII character 13 (Carriage Return).
@@ -122,13 +124,6 @@ fare-csv defines and uses package `FARE-CSV`.
   A boolean that is true iff we accept non-ASCII data.
   A boolean. By default, `T`.
 
-* `Variable *KEEP-META-INFO*`
-  A boolean that when true causes the reader functions to return
-  for each entry, instead of a string, a list of a string and a plist;
-  the plist currently only has one property, :quoted, that has a boolean value
-  which is true iff the string included quotes.
-  A boolean. By default, `NIL`.
-
 * `Variable *EOL*`
   Line ending to use when writing CSV files.
   A string. By default, `+CRLF+` as specified by creativyst.
@@ -159,4 +154,4 @@ fare-csv defines and uses package `FARE-CSV`.
   A macro in which to wrap a program `BODY`, around which
   all the above parameters will be bound as per the RFC4180 specification,
   but with a stricter interpretation:
-  only `+CRLF+` is accepted as `*LINE-ENDINGS*`, and we don't `*ALLOW-BINARY*` data.
+  `*EOL*` is `+CRLF+`, only `+CRLF+` is accepted as `*LINE-ENDINGS*`, and we don't `*ALLOW-BINARY*` data.
